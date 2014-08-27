@@ -52,21 +52,25 @@ log_packet_send(From, To, Packet) ->
       if (Type /= <<"error">>) and (Type /= <<"groupchat">>) and (Type /= <<"headline">>) and (<<>> /= BodyElem) ->
           %%error_logger:info_msg("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
         ?INFO_MSG("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
+        try
           Sender = ejabberd_odbc:escape(From#jid.luser),
           Receiver = ejabberd_odbc:escape(To#jid.luser),
-          Body = ejabberd_odbc:escape(xml:element_to_binary(BodyElem)),
-          ?INFO_MSG("MOD_LOG_ODBC Sender ~p Receiver: ~p PacketData ~p",[Sender, Receiver, Body]),
-          try
-            ejabberd_odbc:sql_query(From#jid.lserver,
-              [<<"insert into message_log (sender, receiver, msg) values ('">>,
-                  Sender, <<"', '">>,
-                  Receiver, <<"', '">>,
-                  Body, <<"');">>]),
-            ok
-          catch
-            _ -> ok
-          end;
-          true -> ok
+          MsgText = case BodyElem of
+            {_,_,_,CData} -> ejabberd_odbc:escape(xml:get_cdata(CData));
+            _ -> ejabberd_odbc:escape(xml:element_to_binary(BodyElem))
+          end,
+
+          ?INFO_MSG("MOD_LOG_ODBC Sender ~p Receiver: ~p PacketData ~p",[Sender, Receiver, MsgText]),
+          ejabberd_odbc:sql_query(From#jid.lserver,
+            [<<"insert into message_log (sender, receiver, msg) values ('">>,
+                Sender, <<"', '">>,
+                Receiver, <<"', '">>,
+                MsgText, <<"');">>]),
+          ok
+        catch
+          _ -> ok
+        end;
+        true -> ok
       end;
     _-> ok
   end.
