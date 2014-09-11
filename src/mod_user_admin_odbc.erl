@@ -31,16 +31,16 @@
 
 -export([start/2, stop/1,
 	 %% Roster
-	 add_jid_to_group/4,
+	 add_jid_to_group/5,
 	 delete_jid_from_group/4
 	]).
 
 -include("ejabberd.hrl").
 -include("ejabberd_commands.hrl").
 -include("mod_roster.hrl").
--include("jlib.hrl").
 
 -include("logger.hrl").
+-include("jlib.hrl").
 
 
 %% Copied from ejabberd_sm.erl
@@ -68,7 +68,7 @@ commands() ->
 			desc = "Add jid to a group in a user's roster (supports ODBC)",
 			module = ?MODULE, function = add_jid_to_group,
 			args = [{localuser, binary}, {localserver, binary},
-				{jid, binary},
+				{jid, binary}, {nick, binary},
 				{group, binary}],
 			result = {res, rescode}},
      #ejabberd_commands{name = delete_jid_from_group, tags = [roster],
@@ -84,17 +84,18 @@ commands() ->
 %%% Roster
 %%%
 
-add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
+add_jid_to_group(LocalUser, LocalServer, JID, Nick, Group) ->
   %%JIDGroups = odbc_queries:get_rostergroup_by_jid(LocalServer, LocalUser, JID),
   %%case JIDGroups of
   %%  {selected,<<"grp">>,Groups} ->
   %%end,
-  %%?DEBUG("add_jid_to_group: Groups - ~p~n",[Group|Groups]),
+  ?DEBUG("add_jid_to_group: Group ~p JID ~p~n",[Group, JID]),
   ejabberd_odbc:sql_query(LocalServer,[<<"insert into rostergroups(username, jid, grp)  values ('">>,
       ejabberd_odbc:escape(LocalUser), <<"','">>,
       ejabberd_odbc:escape(JID), <<"','">>,
       ejabberd_odbc:escape(Group), <<"');">>]),
-  %%push_roster_item(LocalUser, LocalServer, User, Server, {add, Nick, Subs, Group}),
+  JID1 = jlib:string_to_jid(JID),
+  push_roster_item(LocalUser, LocalServer, JID1#jid.luser, JID1#jid.lserver, {add, Nick, <<"add">>, Group}),
   ok.
 
 delete_jid_from_group(LocalUser, LocalServer, JID, Group) ->
