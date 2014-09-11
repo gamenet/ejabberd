@@ -83,6 +83,7 @@ commands() ->
 %%%
 %%% Roster
 %%%
+
 add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
   %%JIDGroups = odbc_queries:get_rostergroup_by_jid(LocalServer, LocalUser, JID),
   %%case JIDGroups of
@@ -90,13 +91,62 @@ add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
   %%end,
   %%?DEBUG("add_jid_to_group: Groups - ~p~n",[Group|Groups]),
   ejabberd_odbc:sql_query(LocalServer,[<<"insert into rostergroups(username, jid, grp)  values ('">>,
-    ejabberd_odbc:escape(LocalUser), <<"','">>, ejabberd_odbc:escape(JID), <<"','">>, ejabberd_odbc:escape(Group), <<"');">>]),
+      ejabberd_odbc:escape(LocalUser), <<"','">>,
+      ejabberd_odbc:escape(JID), <<"','">>,
+      ejabberd_odbc:escape(Group), <<"');">>]),
+  %%push_roster_item(LocalUser, LocalServer, User, Server, {add, Nick, Subs, Group}),
   ok.
 
 delete_jid_from_group(LocalUser, LocalServer, JID, Group) ->
   Groups = odbc_queries:get_rostergroup_by_jid(LocalServer, LocalUser, JID),
   ?DEBUG("add_jid_to_group: Groups - ~p~n",[Groups]),
   ok.
+
+build_roster_item(U, S, {add, Nick, Subs, Group}) ->
+  {xmlel, <<"item">>,
+    [{<<"jid">>, jlib:jid_to_string(jlib:make_jid(U, S, <<>>))},
+      {<<"name">>, Nick},
+      {<<"subscription">>, Subs}],
+    [{xmlel, <<"group">>, [], [{xmlcdata, Group}]}]
+  };
+build_roster_item(U, S, remove) ->
+  {xmlel, <<"item">>,
+    [{<<"jid">>, jlib:jid_to_string(jlib:make_jid(U, S, <<>>))},
+      {<<"subscription">>, <<"remove">>}],
+    []
+  }.
+build_iq_roster_push(Item) ->
+  {xmlel, <<"iq">>,
+    [{<<"type">>, <<"set">>}, {<<"id">>, <<"push">>}],
+    [{xmlel, <<"query">>,
+      [{<<"xmlns">>, ?NS_ROSTER}],
+      [Item]
+    }
+    ]
+  }.
+
+build_broadcast(U, S, {add, _Nick, Subs, _Group}) ->
+  build_broadcast(U, S, list_to_atom(binary_to_list(Subs)));
+build_broadcast(U, S, remove) ->
+  build_broadcast(U, S, none);
+%% @spec (U::binary(), S::binary(), Subs::atom()) -> any()
+%% Subs = both | from | to | none
+build_broadcast(U, S, SubsAtom) when is_atom(SubsAtom) ->
+  {broadcast, {item, {U, S, <<>>}, SubsAtom}}.
+
+push_roster_item(LU, LS, U, S, Action) ->
+  lists:foreach(fun(R) ->
+    push_roster_item(LU, LS, R, U, S, Action)
+  end, ejabberd_sm:get_user_resources(LU, LS)).
+
+push_roster_item(LU, LS, R, U, S, Action) ->
+  LJID = jlib:make_jid(LU, LS, R),
+  BroadcastEl = build_broadcast(U, S, Action),
+  ejabberd_router:route(LJID, LJID, BroadcastEl),
+  Item = build_roster_item(U, S, Action),
+  ResIQ = build_iq_roster_push(Item),
+  ejabberd_router:route(LJID, LJID, ResIQ).
+
 
 %% %%
 %% add_rosteritem(LocalUser, LocalServer, User, Server, Nick, Group, Subs) ->
