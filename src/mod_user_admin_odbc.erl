@@ -32,7 +32,8 @@
 -export([start/2, stop/1,
 	 %% Roster
 	 add_jid_to_group/4,
-	 delete_jid_from_group/4
+	 delete_jid_from_group/4,
+   delete_jid_from_group/5
 	]).
 
 -include("ejabberd.hrl").
@@ -76,7 +77,8 @@ commands() ->
 			module = ?MODULE, function = delete_jid_from_group,
 			args = [{localuser, binary}, {localserver, binary},
 				{jid, binary},
-        {group, binary}],
+        {group, binary},
+        {deleteroster, binary}],
 			result = {res, rescode}}
     ].
 
@@ -99,7 +101,7 @@ add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
       <<"' and jid = '">>,
       ejabberd_odbc:escape(JID),
       <<"';">>]),
-  %%?DEBUG("add_jid_to_group: RosterInfo ~p",[RosterInfo]),
+    ?DEBUG("add_jid_to_group: RosterInfo ~p",[RosterInfo]),
   case RosterInfo of
     {selected,Fields,[[U,J,JidNick]]} ->
       Res = ejabberd_odbc:sql_query(LocalServer,[<<"insert into rostergroups(username, jid, grp)  values ('">>,
@@ -117,32 +119,54 @@ add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
       ok;
       _-> error
       end;
-    _-> error
+    _->
+      ?DEBUG("add_jid_to_group: jid is not in roster",[]),
+      error
   end.
 
-
 delete_jid_from_group(LocalUser, LocalServer, JID, Group) ->
+  delete_jid_from_group(LocalUser, LocalServer, JID, Group, true).
+
+delete_jid_from_group(LocalUser, LocalServer, JID, Group, DeleteRoster) ->
   JID1 = jlib:string_to_jid(JID),
   RosterInfo = ejabberd_odbc:sql_query(LocalServer, [<<"select username,jid,nick from rosterusers where username = '">>,
-    ejabberd_odbc:escape(LocalUser),
-    <<"' and jid = '">>,
-    ejabberd_odbc:escape(JID),
-    <<"';">>]),
+      ejabberd_odbc:escape(LocalUser),
+      <<"' and jid = '">>,
+      ejabberd_odbc:escape(JID),
+      <<"';">>]),
   case RosterInfo of
     {selected,Fields,[[U,J,JidNick]]} ->
       Res = ejabberd_odbc:sql_query(LocalServer,[<<"delete from rostergroups where username = '">>,
-          ejabberd_odbc:escape(LocalUser), <<"' and jid = '">>,
-          ejabberd_odbc:escape(JID), <<"' and grp = '">>,
-          ejabberd_odbc:escape(Group), <<"';">>]),
+                ejabberd_odbc:escape(LocalUser), <<"' and jid = '">>,
+                ejabberd_odbc:escape(JID), <<"' and grp = '">>,
+                ejabberd_odbc:escape(Group), <<"';">>]),
       case Res of
-        {updated,_} ->
+        {updated,AffectedRecords} ->
           SavedGroups = odbc_queries:get_rostergroup_by_jid(LocalServer, LocalUser, JID),
           JIDGroups = case SavedGroups of
                         {selected,[<<"grp">>],Groups} -> [ Grp || [Grp] <- Groups];
                         _-> []
                       end,
-          push_roster_item(LocalUser, LocalServer, JID1#jid.luser, JID1#jid.lserver, {add, JidNick, <<"both">>, JIDGroups}),
-          ok;
+          case [JIDGroups,DeleteRoster] of
+            [[],<<"true">>] ->
+              ejabberd_odbc:sql_query(LocalServer,[<<"delete from rosterusers where (username = '">>,
+                  ejabberd_odbc:escape(LocalUser), <<"' and jid = '">>,
+                  ejabberd_odbc:escape(JID), <<"');">>]),
+
+              push_roster_item(LocalUser, LocalServer, JID1#jid.luser, JID1#jid.lserver, remove),
+
+              %% remove from the opponent's roster
+              %%ejabberd_odbc:sql_query(LocalServer,[<<"delete from rostergroups where username = '">>,
+              %%    ejabberd_odbc:escape(JID1#jid.luser), <<"' and jid = '">>,
+              %%    ejabberd_odbc:escape(jlib:jid_to_string(jlib:make_jid(LocalUser, LocalServer, <<>>))),
+              %%    <<"';">>]),
+              %%push_roster_item(JID1#jid.luser, JID1#jid.lserver, LocalUser, LocalServer, remove),
+
+              ok;
+            _->
+              push_roster_item(LocalUser, LocalServer, JID1#jid.luser, JID1#jid.lserver, {add, JidNick, <<"both">>, JIDGroups}),
+              ok
+          end;
         _-> error
       end;
     _-> error
