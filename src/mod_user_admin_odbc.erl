@@ -31,6 +31,7 @@
 
 -export([start/2, stop/1,
 	 %% Roster
+	 add_friend/6,
 	 add_jid_to_group/4,
 	 delete_jid_from_group/4,
    delete_jid_from_group/5
@@ -45,7 +46,7 @@
 
 
 %% Copied from ejabberd_sm.erl
--record(session, {sid, usr, us, priority, info}).
+%%-record(session, {sid, usr, us, priority, info}).
 
 
 %%%
@@ -79,13 +80,29 @@ commands() ->
 				{jid, binary},
         {group, binary},
         {deleteroster, binary}],
+			result = {res, rescode}},
+
+     #ejabberd_commands{name = add_friend, tags = [roster],
+			desc = "Add jid to the user's roster  (supports ODBC)",
+			module = ?MODULE, function = add_friend,
+			args = [
+	    		    {localuser,binary},
+			    {localserver,binary},
+			    {user,binary},
+			    {server,binary},
+			    {nick,binary},
+			    {subs,binary}],
 			result = {res, rescode}}
+    
     ].
 
 
 %%%
 %%% Roster
 %%%
+
+add_friend(LocalUser, LocalServer, User, Server, Nick, Subs) ->
+    ejabberd_commands:execute_command([], noauth, add_rosteritem, [LocalUser,LocalServer,User,Server, Nick,<<>>,Subs]).
 
 add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
   %%?DEBUG("add_jid_to_group: SavedGroups ~p JIDGroups ~p JID ~p~n",[SavedGroups,JIDGroups, JID]),
@@ -103,7 +120,7 @@ add_jid_to_group(LocalUser, LocalServer, JID, Group) ->
       <<"';">>]),
     ?DEBUG("add_jid_to_group: RosterInfo ~p",[RosterInfo]),
   case RosterInfo of
-    {selected,Fields,[[U,J,JidNick]]} ->
+    {selected,_Fields,[[_U,_J,JidNick]]} ->
       Res = ejabberd_odbc:sql_query(LocalServer,[<<"insert into rostergroups(username, jid, grp)  values ('">>,
           ejabberd_odbc:escape(LocalUser), <<"','">>,
           ejabberd_odbc:escape(JID), <<"','">>,
@@ -135,13 +152,13 @@ delete_jid_from_group(LocalUser, LocalServer, JID, Group, DeleteRoster) ->
       ejabberd_odbc:escape(JID),
       <<"';">>]),
   case RosterInfo of
-    {selected,Fields,[[U,J,JidNick]]} ->
+    {selected,_Fields,[[_U,_J,JidNick]]} ->
       Res = ejabberd_odbc:sql_query(LocalServer,[<<"delete from rostergroups where username = '">>,
                 ejabberd_odbc:escape(LocalUser), <<"' and jid = '">>,
                 ejabberd_odbc:escape(JID), <<"' and grp = '">>,
                 ejabberd_odbc:escape(Group), <<"';">>]),
       case Res of
-        {updated,AffectedRecords} ->
+        {updated,_AffectedRecords} ->
           SavedGroups = odbc_queries:get_rostergroup_by_jid(LocalServer, LocalUser, JID),
           JIDGroups = case SavedGroups of
                         {selected,[<<"grp">>],Groups} -> [ Grp || [Grp] <- Groups];
