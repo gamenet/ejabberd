@@ -5,7 +5,7 @@
 %%% Created :  8 Aug 2004 by Alexey Shchepin <alexey@process-one.net>
 %%%
 %%%
-%%% ejabberd, Copyright (C) 2002-2014   ProcessOne
+%%% ejabberd, Copyright (C) 2002-2015   ProcessOne
 %%%
 %%% This program is free software; you can redistribute it and/or
 %%% modify it under the terms of the GNU General Public License as
@@ -151,7 +151,7 @@ run(Hook, Host, Args) ->
 %% The arguments passed to the function are: [Val | Args].
 %% The result of a call is used as Val for the next call.
 %% If a call returns 'stop', no more calls are performed and 'stopped' is returned.
-%% If a call returns {stopped, NewVal}, no more calls are performed and NewVal is returned.
+%% If a call returns {stop, NewVal}, no more calls are performed and NewVal is returned.
 run_fold(Hook, Val, Args) ->
     run_fold(Hook, global, Val, Args).
 

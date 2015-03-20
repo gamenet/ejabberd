@@ -5,7 +5,7 @@
 %%% Created : 24 Aug 2008 by Stephan Maka <stephan@spaceboyz.net>
 %%%
 %%%
-%%% ejabberd, Copyright (C) 2002-2014   ProcessOne
+%%% ejabberd, Copyright (C) 2002-2015   ProcessOne
 %%%
 %%% This program is free software; you can redistribute it and/or
 %%% modify it under the terms of the GNU General Public License as
@@ -299,7 +299,8 @@ process_blocklist_unblock_all(LUser, LServer, Filter,
                      NewList = Filter(List),
                      NewLists1 = lists:keydelete(Default, 1, Lists),
                      NewLists = [{Default, NewList} | NewLists1],
-                     case ejabberd_riak:put(P#privacy{lists = NewLists}) of
+                     case ejabberd_riak:put(P#privacy{lists = NewLists},
+					    mod_privacy:privacy_schema()) of
                          ok ->
                              {ok, Default, NewList};
                          Err ->

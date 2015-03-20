@@ -5,7 +5,7 @@
 %%% Created :  5 Jan 2003 by Alexey Shchepin <alexey@process-one.net>
 %%%
 %%%
-%%% ejabberd, Copyright (C) 2002-2014   ProcessOne
+%%% ejabberd, Copyright (C) 2002-2015   ProcessOne
 %%%
 %%% This program is free software; you can redistribute it and/or
 %%% modify it under the terms of the GNU General Public License as
@@ -215,26 +215,15 @@ store_offline_msg(Host, {User, _Server}, Msgs, Len, MaxOfflineMsgs, odbc) ->
 					 ejabberd_odbc:escape((M#offline_msg.to)#jid.luser),
 				     From = M#offline_msg.from,
 				     To = M#offline_msg.to,
-				     #xmlel{name = Name, attrs = Attrs,
-					    children = Els} =
-					 M#offline_msg.packet,
-				     Attrs2 =
-					 jlib:replace_from_to_attrs(jlib:jid_to_string(From),
-								    jlib:jid_to_string(To),
-								    Attrs),
-				     Packet = #xmlel{name = Name,
-						     attrs = Attrs2,
-						     children =
-							 Els ++
-							   [jlib:timestamp_to_xml(calendar:now_to_universal_time(M#offline_msg.timestamp),
-										  utc,
-										  jlib:make_jid(<<"">>,
-												Host,
-												<<"">>),
-										  <<"Offline Storage">>),
-							    jlib:timestamp_to_xml(calendar:now_to_universal_time(M#offline_msg.timestamp))]},
+				     Packet =
+					 jlib:replace_from_to(From, To,
+							      M#offline_msg.packet),
+				     NewPacket =
+					 jlib:add_delay_info(Packet, Host,
+							     M#offline_msg.timestamp,
+							     <<"Offline Storage">>),
 				     XML =
-					 ejabberd_odbc:escape(xml:element_to_binary(Packet)),
+					 ejabberd_odbc:escape(xml:element_to_binary(NewPacket)),
 				     odbc_queries:add_spool_sql(Username, XML)
 			     end,
 			     Msgs),
@@ -293,12 +282,26 @@ get_sm_features(_Acc, _From, _To, ?NS_FEATURE_MSGOFFLINE, _Lang) ->
 get_sm_features(Acc, _From, _To, _Node, _Lang) ->
     Acc.
 
+need_to_store(LServer, Packet) ->
+    Type = xml:get_tag_attr_s(<<"type">>, Packet),
+    if (Type /= <<"error">>) and (Type /= <<"groupchat">>)
+       and (Type /= <<"headline">>) ->
+	    case gen_mod:get_module_opt(
+		   LServer, ?MODULE, store_empty_body,
+		   fun(V) when is_boolean(V) -> V end,
+		   true) of
+		false ->
+		    xml:get_subtag(Packet, <<"body">>) /= false;
+		true ->
+		    true
+	    end;
+       true ->
+	    false
+    end.
 
 store_packet(From, To, Packet) ->
-    Type = xml:get_tag_attr_s(<<"type">>, Packet),
-	BodyElem = xml:get_path_s(Packet,[{elem, <<"body">>}]),
-    if (Type /= <<"error">>) and (Type /= <<"groupchat">>)
-	 and (Type /= <<"headline">>) and (<<>> /= BodyElem) ->
+    case need_to_store(To#jid.lserver, Packet) of
+	true ->
 	   case has_no_storage_hint(Packet) of
 	     false ->
 		 case check_event(From, To, Packet) of
@@ -316,7 +319,7 @@ store_packet(From, To, Packet) ->
 		 end;
 	     _ -> ok
 	   end;
-       true -> ok
+       false -> ok
     end.
 
 has_no_storage_hint(Packet) ->
@@ -418,15 +421,12 @@ resend_offline_messages(User, Server) ->
     case mnesia:transaction(F) of
       {atomic, Rs} ->
 	  lists:foreach(fun (R) ->
-				#xmlel{name = Name, attrs = Attrs,
-				       children = Els} =
-				    R#offline_msg.packet,
 				ejabberd_sm !
 				  {route, R#offline_msg.from, R#offline_msg.to,
-				   #xmlel{name = Name, attrs = Attrs,
-					  children =
-					      Els ++
-						[jlib:timestamp_to_xml(calendar:now_to_universal_time(R#offline_msg.timestamp))]}}
+				   jlib:add_delay_info(R#offline_msg.packet,
+						       LServer,
+						       R#offline_msg.timestamp,
+						       <<"Offline Storage">>)}
 			end,
 			lists:keysort(#offline_msg.timestamp, Rs));
       _ -> ok
@@ -672,19 +672,9 @@ get_offline_els(LUser, LServer, odbc) ->
     end.
 
 offline_msg_to_route(LServer, #offline_msg{} = R) ->
-    El = #xmlel{children = Els} = R#offline_msg.packet,
     {route, R#offline_msg.from, R#offline_msg.to,
-     El#xmlel{children =
-                  Els ++
-                  [jlib:timestamp_to_xml(
-                     calendar:now_to_universal_time(
-                       R#offline_msg.timestamp),
-                     utc,
-                     jlib:make_jid(<<"">>, LServer, <<"">>),
-                     <<"Offline Storage">>),
-                   jlib:timestamp_to_xml(
-                     calendar:now_to_universal_time(
-                       R#offline_msg.timestamp))]}};
+     jlib:add_delay_info(R#offline_msg.packet, LServer, R#offline_msg.timestamp,
+			 <<"Offline Storage">>)};
 offline_msg_to_route(_LServer, #xmlel{} = El) ->
     To = jlib:string_to_jid(xml:get_tag_attr_s(<<"to">>, El)),
     From = jlib:string_to_jid(xml:get_tag_attr_s(<<"from">>, El)),
@@ -1095,26 +1085,14 @@ export(_Server) ->
                              packet = Packet})
             when LServer == Host ->
               Username = ejabberd_odbc:escape(LUser),
-              #xmlel{name = Name, attrs = Attrs, children = Els} =
-                  Packet,
-              Attrs2 =
-                  jlib:replace_from_to_attrs(jlib:jid_to_string(From),
-                                             jlib:jid_to_string(To),
-                                             Attrs),
-              NewPacket = #xmlel{name = Name, attrs = Attrs2,
-                                 children =
-                                     Els ++
-                                     [jlib:timestamp_to_xml(
-                                        calendar:now_to_universal_time(TimeStamp),
-                                        utc,
-                                        jlib:make_jid(<<"">>,
-                                                      LServer,
-                                                      <<"">>),
-                                        <<"Offline Storage">>),
-                                      jlib:timestamp_to_xml(
-                                        calendar:now_to_universal_time(TimeStamp))]},
+              Packet1 =
+                  jlib:replace_from_to(jlib:jid_to_string(From),
+                                       jlib:jid_to_string(To), Packet),
+              Packet2 =
+                  jlib:add_delay_info(Packet1, LServer, TimeStamp,
+                                      <<"Offline Storage">>),
               XML =
-                  ejabberd_odbc:escape(xml:element_to_binary(NewPacket)),
+                  ejabberd_odbc:escape(xml:element_to_binary(Packet2)),
               [[<<"delete from spool where username='">>, Username, <<"';">>],
                [<<"insert into spool(username, xml) values ('">>,
                 Username, <<"', '">>, XML, <<"');">>]];
