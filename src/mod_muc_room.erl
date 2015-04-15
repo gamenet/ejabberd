@@ -2525,7 +2525,9 @@ process_iq_admin(From, get, Lang, SubEl, StateData) ->
 			SAffiliation ->
 			    if (FAffiliation == owner) or
 				 (FAffiliation == admin) or
-				 ((FAffiliation == member) and (SAffiliation == member)) ->
+				 %%((FAffiliation == member) and (SAffiliation == member)) ->
+				 %% allow member to get list of owners and admins too
+				 (FAffiliation == member) ->				 
 				   Items = items_with_affiliation(SAffiliation,
 								  StateData),
 				   {result, Items, StateData};
