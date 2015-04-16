@@ -2731,7 +2731,8 @@ process_admin_items_set(UJID, Items, Lang, StateData) ->
 	    _ -> ok
 	  end,
 	  {result, [], NSD};
-      Err -> Err
+      Err -> 
+        Err
     end.
 
 find_changed_items(_UJID, _UAffiliation, _URole, [],
@@ -2801,7 +2802,7 @@ find_changed_items(UJID, UAffiliation, URole,
 							     SAffiliation,
 							     ServiceAf)
 					      of
-					    nothing -> nothing;
+					    nothing -> 	nothing;
 					    true -> true;
 					    check_owner ->
 						case search_affiliation(owner,
@@ -2813,7 +2814,12 @@ find_changed_items(UJID, UAffiliation, URole,
 							jlib:jid_tolower(jlib:jid_remove_resource(UJID));
 						  _ -> true
 						end;
-					    _ -> false
+					    _ -> 
+					    	%% allow user to set affiliation=none for himself
+					    	case {jlib:jid_remove_resource(UJID) == JID, SAffiliation} of
+					    	    {true,none} -> true;
+					    	    _ -> false
+					    	end
 					  end,
 			    case CanChangeRA of
 			      nothing ->
@@ -2903,6 +2909,8 @@ can_change_ra(_FAffiliation, _FRole, _TAffiliation,
 	      TRole, role, Value, _ServiceAf)
     when TRole == Value ->
     nothing;
+    
+%%vvsvvs    
 can_change_ra(FAffiliation, _FRole, outcast, _TRole,
 	      affiliation, none, _ServiceAf)
     when (FAffiliation == owner) or
