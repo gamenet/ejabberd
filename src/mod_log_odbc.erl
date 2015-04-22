@@ -29,7 +29,7 @@
 
 start(Host, Opts) ->
 %%  error_logger:info_msg("MOD_LOG_ODBC Module ~p Host ~p Opts ~p",[?MODULE, {host,Host,host}, {opts,Opts,opts}]),
-  ?INFO_MSG("MOD_LOG_ODBC Module ~p Host ~p Opts ~p",[?MODULE, {host,Host,host}, {opts,Opts,opts}]),
+  %%?INFO_MSG("MOD_LOG_ODBC Module ~p Host ~p Opts ~p",[?MODULE, {host,Host,host}, {opts,Opts,opts}]),
   ejabberd_hooks:add(user_send_packet, Host, ?MODULE, log_packet_send, 95).
   %%start_vhs(Host, Opts).
 
@@ -42,7 +42,7 @@ stop(Host) ->
 
 log_packet_send(From, To, Packet) ->
 %%  error_logger:info_msg("MOD_LOG_ODBC RECEIVED PACKET From: ~p To: ~p Packet: ~p~n",[From, To, Packet]),
-  ?INFO_MSG("MOD_LOG_ODBC RECEIVED PACKET From: ~p To: ~p Packet: ~p~n",[From, To, Packet]),
+  %%?INFO_MSG("MOD_LOG_ODBC RECEIVED PACKET From: ~p To: ~p Packet: ~p~n",[From, To, Packet]),
 
   Type = xml:get_tag_attr_s(<<"type">>, Packet),
   BodyElem = xml:get_path_s(Packet,[{elem, <<"body">>}]),
@@ -51,7 +51,7 @@ log_packet_send(From, To, Packet) ->
     {xmlel,<<"message">>,_,_} ->
       if (Type /= <<"error">>) and (Type /= <<"groupchat">>) and (Type /= <<"headline">>) and (<<>> /= BodyElem) ->
           %%error_logger:info_msg("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
-        ?INFO_MSG("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
+        %%?INFO_MSG("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
         try
           Sender = ejabberd_odbc:escape(From#jid.luser),
           Receiver = ejabberd_odbc:escape(To#jid.luser),
@@ -60,7 +60,7 @@ log_packet_send(From, To, Packet) ->
             _ -> ejabberd_odbc:escape(xml:element_to_binary(BodyElem))
           end,
 
-          ?INFO_MSG("MOD_LOG_ODBC Sender ~p Receiver: ~p PacketData ~p",[Sender, Receiver, MsgText]),
+          %%?INFO_MSG("MOD_LOG_ODBC Sender ~p Receiver: ~p PacketData ~p",[Sender, Receiver, MsgText]),
           ejabberd_odbc:sql_query(From#jid.lserver,
             [<<"insert into message_log (sender, receiver, msg) values ('">>,
                 Sender, <<"', '">>,
