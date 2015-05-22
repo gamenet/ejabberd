@@ -49,7 +49,9 @@ log_packet_send(From, To, Packet) ->
 
   case Packet of
     {xmlel,<<"message">>,_,_} ->
-      if (Type /= <<"error">>) and (Type /= <<"groupchat">>) and (Type /= <<"headline">>) and (<<>> /= BodyElem) ->
+%%      if (Type /= <<"error">>) and (Type /= <<"groupchat">>) and (Type /= <<"headline">>) and (<<>> /= BodyElem) ->
+      if (Type /= <<"error">>) and (Type /= <<"headline">>) and (<<>> /= BodyElem) ->
+
           %%error_logger:info_msg("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
         %%?INFO_MSG("MOD_LOG_ODBC PACKETTYPE ~p BodyElem: ~p",[Type,BodyElem]),
         try
