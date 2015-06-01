@@ -3713,11 +3713,10 @@ set_xoption([{<<"members_by_default">>, [Val]} | Opts],
     ?SET_BOOL_XOPT(members_by_default, Val);
 %%set_xoption([{<<"muc#roomconfig_membersonly">>, [Val]}
 set_xoption([{<<"muc#roomconfig_membersonly">>, [_Val]}
-
 	     | Opts],
 	    Config) ->
     %%?SET_BOOL_XOPT(members_only, Val);
-    ?SET_BOOL_XOPT(members_only, true);    
+    ?SET_BOOL_XOPT(members_only, <<"1">>);    
 set_xoption([{<<"captcha_protected">>, [Val]} | Opts],
 	    Config) ->
     ?SET_BOOL_XOPT(captcha_protected, Val);
