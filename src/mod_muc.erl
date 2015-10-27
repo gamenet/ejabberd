@@ -736,51 +736,76 @@ iq_disco_info(Lang) ->
 	    attrs = [{<<"var">>, ?NS_VCARD}], children = []}].
 
 iq_disco_items(Host, From, Lang, none) ->
+    VhRooms = get_vh_rooms(Host),
+    {_,UserName,_,_,_,_,_} = From,
+    PrivateData = mod_private:get_data(UserName, <<"qj.gamenet.ru">>),
+    [RoomData]=lists:filtermap(fun(X) -> case X of {xmlel,<<"storage">>,_,Conferences} -> {true,Conferences}; _ -> false end end, PrivateData),
+    UserRooms = lists:filtermap(fun(X) -> case X of {<<"jid">>,_} -> {_,A} = X, RoomName = jlib:string_to_jid(A), {true,RoomName#jid.luser};  
+	    _-> false end end,
+	lists:flatmap(fun(X) -> {_,_,A,_} = X, case A of {<<"jid">>,_} -> {_,RoomJid} = A, RoomJid; _ -> A end end, RoomData)),
+    
     lists:zf(fun (#muc_online_room{name_host =
 				       {Name, _Host},
 				   pid = Pid}) ->
-		     case catch gen_fsm:sync_send_all_state_event(Pid,
+		     case lists:member(Name,UserRooms) of
+		        true ->
+		    	    case catch gen_fsm:sync_send_all_state_event(Pid,
 								  {get_disco_item,
 								   From, Lang},
 								  100)
-			 of
-		       {item, Desc} ->
-			   flush(),
-			   {true,
-			    #xmlel{name = <<"item">>,
-				   attrs =
-				       [{<<"jid">>,
-					 jlib:jid_to_string({Name, Host,
+			    of
+		    		{item, Desc} ->
+				    flush(),
+				    {true,
+					#xmlel{name = <<"item">>,
+					    attrs =
+				    		[{<<"jid">>,
+						    jlib:jid_to_string({Name, Host,
 							     <<"">>})},
-					{<<"name">>, Desc}],
-				   children = []}};
-		       _ -> false
-		     end
-	     end, get_vh_rooms(Host));
+						    {<<"name">>, Desc}],
+						children = []}};
+		    		_ -> false
+	    	    	    end;
+	    		_-> false
+	    	    end
+	     end, VhRooms);
+	     %%end, get_vh_rooms(Host));
+	     
 
 iq_disco_items(Host, From, Lang, Rsm) ->
+    {_,UserName,_,_,_,_,_} = From,
+    PrivateData = mod_private:get_data(UserName, <<"qj.gamenet.ru">>),
+    [RoomData]=lists:filtermap(fun(X) -> case X of {xmlel,<<"storage">>,_,Conferences} -> {true,Conferences}; _ -> false end end, PrivateData),
+    UserRooms = lists:filtermap(fun(X) -> case X of {<<"jid">>,_} -> {_,A} = X, RoomName = jlib:string_to_jid(A), {true,RoomName#jid.luser};  
+	    _-> false end end,
+	lists:flatmap(fun(X) -> {_,_,A,_} = X, case A of {<<"jid">>,_} -> {_,RoomJid} = A, RoomJid; _ -> A end end, RoomData)),
+
     {Rooms, RsmO} = get_vh_rooms(Host, Rsm),
     RsmOut = jlib:rsm_encode(RsmO),
     lists:zf(fun (#muc_online_room{name_host =
 				       {Name, _Host},
 				   pid = Pid}) ->
-		     case catch gen_fsm:sync_send_all_state_event(Pid,
+	    case lists:member(Name,UserRooms) of
+		    true ->
+		        case catch gen_fsm:sync_send_all_state_event(Pid,
 								  {get_disco_item,
 								   From, Lang},
 								  100)
-			 of
-		       {item, Desc} ->
-			   flush(),
-			   {true,
-			    #xmlel{name = <<"item">>,
-				   attrs =
-				       [{<<"jid">>,
-					 jlib:jid_to_string({Name, Host,
+			of
+		    	    {item, Desc} ->
+				flush(),
+				{true,
+				    #xmlel{name = <<"item">>,
+					attrs =
+				    	    [{<<"jid">>,
+						jlib:jid_to_string({Name, Host,
 							     <<"">>})},
-					{<<"name">>, Desc}],
+						{<<"name">>, Desc}],
 				   children = []}};
-		       _ -> false
-		     end
+		    	     _ -> false
+			 end;
+		    _-> false
+		end
 	     end,
 	     Rooms)
       ++ RsmOut.
